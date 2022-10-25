@@ -7,5 +7,6 @@ export default defineConfig({
   plugins: [
 		vue(),
 		vuetify({ autoImport: true }),
-]
+],
+	base:'/CAD-CastFormAssistant/'
 })
