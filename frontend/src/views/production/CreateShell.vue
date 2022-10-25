@@ -80,7 +80,7 @@ export default {
   },
   data() {
     return {
-      thickness: 0.3
+      thickness: 1
     }
   },
   mounted() {
@@ -103,12 +103,7 @@ export default {
     helper.material.transparent = true;
     scene.add(helper);
 
-    // Mesh setup
-    let material = new THREE.MeshStandardMaterial({
-      color: 0x808080,
-      roughness: 0.4,
-      metalness: 1.0,
-    });
+    let material = new THREE.MeshLambertMaterial({color:0xff0000})
     initial_mesh = new THREE.Mesh(this.initial_geometry, material);
     initial_mesh.geometry.center();
     scene.add(initial_mesh);
@@ -147,12 +142,11 @@ export default {
       let length = this.thickness
 
 
-      const material = new THREE.MeshBasicMaterial({
-        color: 'cyan',
+      const material = new THREE.MeshLambertMaterial({
+        color:'#36454F',
         transparent: true,
-        opacity: 0.4
+        opacity: 0.8
     })
-
 
       let inverted_geometry = geometry.clone()
       this.insideOut(inverted_geometry)
@@ -204,7 +198,6 @@ export default {
         invertedPositions[p + 8] = position.array[p + 8]
       }
       geometry.setAttribute('position', new THREE.BufferAttribute(invertedPositions, 3));
-      //return geometry
     },
     dilute_geometry(geometry, length, visualize_normals = false) {
       let compute_normals = function (normal, position) {
@@ -244,7 +237,6 @@ export default {
           z += normals_array[idx].z
         }
         if (visualize_normals){
-          console.log('visualize_normals')
           let origin = new THREE.Vector3(position.array[f], position.array[f + 1], position.array[f + 2]);
           let dir = new THREE.Vector3(x/normals_array.length, y/normals_array.length, z/normals_array.length);
           let helper = new THREE.ArrowHelper(dir, origin, length, 0x00ff00);

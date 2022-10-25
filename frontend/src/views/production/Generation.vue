@@ -1,13 +1,26 @@
 <template>
-<v-container fluid class="fill-height">
-    <v-card class="h-75">
-      <v-card-title>Schritt 6 - Download</v-card-title>
-      <v-card-text>
-        STL wird erstellt. Einen Moment bitte..
-      </v-card-text>
-        <button @click="download_stl()">Download Shell</button>
-    </v-card>
+    <v-container>
+<v-card >
+          <v-card-title>Schritt 6 - Generierung des Modells</v-card-title>
+  <v-card-text :v-if="!is_generated">
+    Bitte warten. Die STL Datei wird generiert...
+  </v-card-text>
+  </v-card>
+      <v-card-actions>
+      <v-spacer></v-spacer>
+      <v-btn
+          variant="flat"
+          color="primary"
+          @click="download_stl()"
+          :disabled="!is_generated"
+        >
+          Download
+        </v-btn>
+        <v-spacer></v-spacer>
+    </v-card-actions>
+
   </v-container>
+
 </template>
 
 <script>
@@ -24,6 +37,7 @@ import {
   StandardMaterial,
   Texture
 } from 'troisjs';
+
 import * as THREE from "three";
 import {CSG} from "three-csg-ts";
 import {STLExporter} from "three/examples/jsm/exporters/STLExporter";
@@ -32,6 +46,7 @@ export default {
    props: ['holeMeshes', 'adapterMeshes', 'geometry'],
     data() {
     return {
+      is_generated:false,
       mesh: {}
     }
   },
@@ -39,8 +54,10 @@ export default {
     Plane, PhongMaterial, AmbientLight, Box, Camera, Renderer, PointLight,
     Scene, Sphere, StandardMaterial, Texture
   },
-  mounted() {
-    this.create_mesh()
+  mounted(){
+     this.$nextTick( () => {
+                this.create_mesh()
+            })
   },
   methods: {
     download_stl(){
@@ -69,7 +86,8 @@ export default {
       let mesh = new THREE.Mesh(geo, material)
       mesh.updateMatrix();
 
-      for (let i = 0; i < this.holeMeshes.length; i++) {
+      let maxLength = Math.min(this.holeMeshes.length,10)
+      for (let i = 0; i < maxLength; i++) {
         holeMesh = this.holeMeshes[i].clone()
         this.set_colors(holeMesh.geometry)
         holeMesh.updateMatrix();
@@ -86,6 +104,7 @@ export default {
         adapterMesh = null
       }
       this.mesh = mesh
+      this.is_generated = true
 
     },
   }

@@ -49,30 +49,15 @@ import {
   StandardMaterial,
   Texture
 } from 'troisjs';
-import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils";
-import {MeshSurfaceSampler} from "three/examples/jsm/math/MeshSurfaceSampler";
 import {CSG} from "three-csg-ts";
 
-// https://www.reddit.com/r/proceduralgeneration/comments/9duuso/how_would_i_evenly_distribute_points_on_a_3d_mesh/
-import {
-  acceleratedRaycast,
-  computeBoundsTree,
-  CONTAINED,
-  disposeBoundsTree,
-  INTERSECTED,
-  NOT_INTERSECTED
-} from "three-mesh-bvh";
 let targetMesh, brushMesh, holeMesh
 let renderer, camera, scene, controls
 let clientWidth, clientHeight
 
 
 let mouse = new THREE.Vector2();
-let mouseType = - 1, brushActive = false;
 
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 export default {
   name: "PlaceAdapter",
   props: ['geometry', 'shell_thickness', 'meshes'],
@@ -128,6 +113,7 @@ export default {
     const brushMaterial = new THREE.MeshStandardMaterial( { color: 0xff0000 } );
 
     brushMesh = new THREE.Mesh( brushGeometry.geometry, brushMaterial );
+    brushMesh.visible = false;
     scene.add( brushMesh );
 
 
@@ -136,7 +122,7 @@ export default {
     holeMesh = new THREE.Mesh( holeGeometry, brushMaterial );
     scene.add(holeMesh);
 
-    // Camera Orientation setu
+    // Camera Orientation setup
     targetMesh.geometry.computeBoundingBox();
     let box = new THREE.Box3()
     box.copy(targetMesh.geometry.boundingBox)
@@ -152,8 +138,6 @@ export default {
     });
 
     window.addEventListener( 'pointermove',  ( e ) => {
-      //let left = this.$refs.rendersize.$el.getBoundingClientRect().left
-      //let top = this.$refs.rendersize.$el.getBoundingClientRect().top
       let x = e.clientX
       let y = e.clientY
       mouse.x = (x / window.innerWidth * 3) - 1.5;

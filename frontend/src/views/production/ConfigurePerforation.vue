@@ -146,7 +146,6 @@ export default {
 
     // Mesh setup
     targetMesh = new THREE.Mesh(this.geometry, new THREE.MeshLambertMaterial({color:'#36454F'}));
-    //targetMesh.geometry.computeBoundsTree();
     scene.add(targetMesh);
 
     // Camera Orientation setup

@@ -116,7 +116,6 @@ export default {
     }
     const colorAttribute = new THREE.Float32BufferAttribute(colors, 3);
     this.initial_geometry.setAttribute('color', colorAttribute);
-    //this.initial_geometry.computeBoundsTree();
 
     // Mesh setup
     targetMesh = new THREE.Mesh(this.initial_geometry, new THREE.MeshLambertMaterial({vertexColors: true}));
@@ -160,10 +159,6 @@ export default {
 
     window.addEventListener('pointermove', (e) => {
       // get x,y coords into canvas where click occurred
-
-
-      //let left = this.$refs.rendersize.$el.getBoundingClientRect().left
-      //let top = this.$refs.rendersize.$el.getBoundingClientRect().top
       let x = e.clientX
       let y = e.clientY
       mouse.x = (x / window.innerWidth * 3) - 1.5;
