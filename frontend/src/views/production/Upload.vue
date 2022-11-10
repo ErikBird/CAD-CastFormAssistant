@@ -1,50 +1,84 @@
 <template>
-  <v-container>
-<v-card >
-    <v-card-title>Schritt 1 - Datei Hochladen</v-card-title>
-    <v-card-text width="100%">
-      <v-file-input
-        ref="file"
-        :value="InitialGeometry"
-        @change="this.getGeometryFromPath()"
-        label="STL Datei"
-        type="file"
-        accept=".stl"
-      >
-      </v-file-input>
-    </v-card-text>
-  </v-card>
-      <v-card-actions>
-      <v-spacer></v-spacer>
-      <v-btn
-          variant="flat"
-          color="primary"
-          @click="$emit('setStep', 1)"
-          :disabled="InitialGeometry===null"
-        >
-          Weiter
-        </v-btn>
-    </v-card-actions>
+  <v-sheet height="100%" class="d-flex justify-end align-center">
+    <v-card class='ma-5' width="50%">
+      <v-card-title>Schritt 1 - Datei Hochladen</v-card-title>
+      <v-card-text>
+        Wir unterstützen STL und OBJ Dateien bis 10 MB.
+        <v-progress-linear
+            v-if="loading"
+            :model-value="loadValue"
+            indeterminate
+            height="10"
+        ></v-progress-linear>
 
-  </v-container>
+        <v-file-input
+            v-if="!loading"
+            ref="file"
+            :rules="rules"
+            :value="InitialGeometry"
+            @change="this.getGeometryFromPath()"
+            label="Upload 3D Model"
+            type="file"
+            variant="outlined"
+            accept="model/stl, model/obj"
+        >
+        </v-file-input>
+      </v-card-text>
+    </v-card>
+  </v-sheet>
 </template>
 
 <script>
 import {STLLoader} from "three/examples/jsm/loaders/STLLoader";
-import * as THREE from "three";
+import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
 
 export default {
   name: "Upload",
+  data() {
+    return {
+      loading: false,
+      loadValue: 0,
+      rules: [
+      value => {
+        return !value || !value.length || value[0].size < 10000000 || 'Model size should be less than 10 MB!'
+      },],
+    }
+  },
   props: ['InitialGeometry'],
-  emits: ['SetGeometry'],
-  methods:{
+  emits: ['SetGeometry', 'setStep'],
+  methods: {
+    onProgress(xhr) {
+      if (xhr.lengthComputable) {
+        const percentComplete = xhr.loaded / xhr.total * 100;
+        this.loadValue = Math.round(percentComplete, 2);
+        console.log(this.loadValue)
+      }
+    },
     getGeometryFromPath() {
       let file = this.$refs.file.files[0];
       let url = URL.createObjectURL(file)
-      let loader = new STLLoader();
-      loader.load( url,  ( geometry ) => {
-        this.$emit('SetGeometry', geometry)
-      });
+      if (file.size < 10000000) {
+
+        if (file.type === 'model/stl') {
+          this.loading = true
+          let loader = new STLLoader();
+          loader.load(url, (geometry) => {
+            this.loading = false
+            this.$emit('SetGeometry', geometry)
+            this.$emit('setStep', 1)
+          }, this.onProgress);
+        } else if (file.type === 'model/obj') {
+          this.loading = true
+          let loader = new OBJLoader();
+          loader.load(url, (obj) => {
+            this.loading = false
+            this.$emit('SetGeometry', obj.children[0].geometry)
+            this.$emit('setStep', 1)
+          }, this.onProgress);
+        } else {
+          alert('Something went wront with the file format. No loader has been found.')
+        }
+      }
     }
   },
 }
