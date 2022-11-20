@@ -53,6 +53,7 @@
 
 <script>
 import * as THREE from "three";
+import * as Comlink from "comlink";
 import {
   AmbientLight,
   Box,
@@ -70,6 +71,7 @@ import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUti
 import {VertexNormalsHelper} from "three/examples/jsm/helpers/VertexNormalsHelper";
 
 let initial_mesh, shell_mesh
+let CSG_Tool = new ComlinkWorker(new URL('/workers/webworker.js', import.meta.url), {})
 export default {
   name: "CreateShell",
   props: ['initial_geometry'],
@@ -80,7 +82,8 @@ export default {
   },
   data() {
     return {
-      thickness: 1
+      thickness: 1,
+      loading: false,
     }
   },
   mounted() {
@@ -135,8 +138,7 @@ export default {
       camera.updateProjectionMatrix();
       renderer.three.setSize(clientWidth, clientHeight)
     },
-    create_shell() {
-      let visualize_normals=false
+    async create_shell() {
       let scene = this.$refs.scene
       let geometry = this.initial_geometry
       let length = this.thickness
@@ -148,15 +150,9 @@ export default {
         opacity: 0.8
     })
 
-      let inverted_geometry = geometry.clone()
-      this.insideOut(inverted_geometry)
-      inverted_geometry.computeVertexNormals()
-
-      let diluted_geometry = this.dilute_geometry(geometry, length, visualize_normals)
-
-      let merged_geometry = BufferGeometryUtils.mergeBufferGeometries(
-          [diluted_geometry, inverted_geometry],true)
-      this.shell_geometry = merged_geometry
+      let loader = new THREE.BufferGeometryLoader();
+      this.loading=true;
+      let merged_geometry = loader.parse(await CSG_Tool.create_shell(geometry.toJSON(), length))
 
       if (shell_mesh !== undefined){
         shell_mesh.geometry.dispose();
