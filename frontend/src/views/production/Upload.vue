@@ -17,7 +17,7 @@
             :rules="rules"
             :value="InitialGeometry"
             @change="this.getGeometryFromPath()"
-            label="Upload 3D Model"
+            label="3D Model hochladen"
             type="file"
             variant="outlined"
             accept="model/stl, model/obj"
@@ -51,7 +51,6 @@ export default {
       if (xhr.lengthComputable) {
         const percentComplete = xhr.loaded / xhr.total * 100;
         this.loadValue = Math.round(percentComplete, 2);
-        console.log(this.loadValue)
       }
     },
     getGeometryFromPath() {
