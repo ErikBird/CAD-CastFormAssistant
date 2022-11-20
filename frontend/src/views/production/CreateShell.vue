@@ -7,13 +7,21 @@
             min="0.1"
             max="5"
             width="200"
-            @update:modelValue="create_shell"
             class="ml-10 mr-10"
             v-model="thickness"
             prepend-icon="mdi-arrow-expand-vertical"
         ></v-slider>
-        <v-chip class="mr-5">{{ parseFloat(thickness.toFixed(2)) }} mm</v-chip>
-
+        <v-text-field
+            variant="outlined"
+            v-model="thickness"
+            suffix="mm"
+        ></v-text-field>
+         <v-progress-circular
+             v-if="loading"
+          indeterminate
+          color="primary"
+        ></v-progress-circular>
+        <v-btn v-if="!loading" class="ml-5 mr-5" rounded color="primary" @click="create_shell"> Update</v-btn>
       </div>
       <v-card-text
           ref="rendersize"
@@ -38,16 +46,16 @@
 
     </v-card>
     <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-            variant="flat"
-            color="primary"
-            @click="$emit('setStep', 2)"
-        >
-          Weiter
-        </v-btn>
+      <v-spacer></v-spacer>
+      <v-btn
+          variant="flat"
+          color="primary"
+          @click="$emit('setStep', 2)"
+      >
+        Weiter
+      </v-btn>
 
-      </v-card-actions>
+    </v-card-actions>
   </v-container>
 </template>
 
@@ -106,7 +114,7 @@ export default {
     helper.material.transparent = true;
     scene.add(helper);
 
-    let material = new THREE.MeshLambertMaterial({color:0xff0000})
+    let material = new THREE.MeshLambertMaterial({color: 0xff0000})
     initial_mesh = new THREE.Mesh(this.initial_geometry, material);
     initial_mesh.geometry.center();
     scene.add(initial_mesh);
@@ -123,8 +131,8 @@ export default {
       this.resizeRenderer()
     });
 
-    const axesHelper = new THREE.AxesHelper( 5 );
-    scene.add( axesHelper );
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
 
     this.create_shell()
   },
@@ -143,109 +151,27 @@ export default {
       let geometry = this.initial_geometry
       let length = this.thickness
 
-
       const material = new THREE.MeshLambertMaterial({
-        color:'#36454F',
+        color: '#36454F',
         transparent: true,
         opacity: 0.8
-    })
+      })
 
       let loader = new THREE.BufferGeometryLoader();
       this.loading=true;
       let merged_geometry = loader.parse(await CSG_Tool.create_shell(geometry.toJSON(), length))
 
-      if (shell_mesh !== undefined){
+      if (shell_mesh !== undefined) {
         shell_mesh.geometry.dispose();
         shell_mesh.material.dispose();
-        scene.remove( shell_mesh );
+        scene.remove(shell_mesh);
       }
-      shell_mesh = new THREE.Mesh( merged_geometry, material );
+      shell_mesh = new THREE.Mesh(merged_geometry, material);
 
-      scene.add( shell_mesh );
+      scene.add(shell_mesh);
       this.$emit('setThickness', this.thickness)
       this.$emit('setGeometry', merged_geometry)
-    },
-
-    insideOut(geometry) {
-      let position = geometry.getAttribute('position');
-      let invertedPositions = new Float32Array(position.array.length);
-      for (let p = 0; p < position.array.length; p += 9) {
-        // https://newbedev.com/in-what-order-should-i-send-my-vertices-to-opengl-for-culling
-        // Change the order~direction of the triangle
-        //  A
-        //  |\
-        //  | \
-        //  |  \
-        //  B---C
-        // A->B->C would be front facing (counter-clockwise order), A->C->B would be rear-facing (clockwise order).
-        // One has to flip two points
-
-        // A -> B
-        invertedPositions[p + 3] = position.array[p]
-        invertedPositions[p + 4] = position.array[p + 1]
-        invertedPositions[p + 5] = position.array[p + 2]
-        // B -> A
-        invertedPositions[p] = position.array[p + 3]
-        invertedPositions[p + 1] = position.array[p + 4]
-        invertedPositions[p + 2] = position.array[p + 5]
-        // C -> C
-        invertedPositions[p + 6] = position.array[p + 6]
-        invertedPositions[p + 7] = position.array[p + 7]
-        invertedPositions[p + 8] = position.array[p + 8]
-      }
-      geometry.setAttribute('position', new THREE.BufferAttribute(invertedPositions, 3));
-    },
-    dilute_geometry(geometry, length, visualize_normals = false) {
-      let compute_normals = function (normal, position) {
-        // create new normals
-        const vertices_normals = {}
-        for (let f = 0; f < normal.array.length; f += 3) {
-          let dir = new THREE.Vector3(normal.array[f], normal.array[f + 1], normal.array[f + 2])
-          dir.normalize()
-          origin = new THREE.Vector3(position.array[f], position.array[f + 1], position.array[f + 2]);
-
-          let key = [origin.x, origin.y, origin.z].join(',')
-          let normals = [dir]
-          if (Object.hasOwn(vertices_normals, key)) {
-            normals = [...vertices_normals[key], dir]
-          }
-          vertices_normals[key] = normals
-        }
-        return vertices_normals;
-      };
-      geometry.computeVertexNormals();
-      geometry.normalizeNormals()
-      let geometry_copy = geometry.clone()
-      let normal = geometry.getAttribute('normal');
-      let position = geometry.getAttribute('position');
-      let vertices_normals = compute_normals(normal, position)
-      let dilutedVertes = new Float32Array(normal.array.length);
-      let scene = this.$refs.scene
-      for (let f = 0; f < normal.array.length; f += 3) {
-
-        let normals_array = vertices_normals[[position.array[f], position.array[f + 1], position.array[f + 2]].join(',')]
-        let x = 0
-        let y = 0
-        let z = 0
-        for (let idx = 0; idx < normals_array.length; idx++) {
-          x += normals_array[idx].x
-          y += normals_array[idx].y
-          z += normals_array[idx].z
-        }
-        if (visualize_normals){
-          let origin = new THREE.Vector3(position.array[f], position.array[f + 1], position.array[f + 2]);
-          let dir = new THREE.Vector3(x/normals_array.length, y/normals_array.length, z/normals_array.length);
-          let helper = new THREE.ArrowHelper(dir, origin, length, 0x00ff00);
-          helper.position.copy(origin);
-
-          scene.add(helper);
-        }
-        dilutedVertes[f] = position.array[f] + x / normals_array.length * length
-        dilutedVertes[f + 1] = position.array[f + 1] + y / normals_array.length * length
-        dilutedVertes[f + 2] = position.array[f + 2] + z / normals_array.length * length
-      }
-      geometry_copy.setAttribute('position', new THREE.BufferAttribute(dilutedVertes, 3));
-      return geometry_copy
+      this.loading=false;
     },
   }
 }
