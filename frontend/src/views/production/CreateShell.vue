@@ -4,8 +4,8 @@
       <v-card-title>Schritt 2 - Form Erstellen</v-card-title>
       <div class="d-flex flex-row mb-6 justify-space-between">
         <v-slider
-            min="0.1"
-            max="5"
+            min="0"
+            max="0.4"
             width="200"
             class="ml-10 mr-10"
             v-model="thickness"
@@ -90,7 +90,7 @@ export default {
   },
   data() {
     return {
-      thickness: 1,
+      thickness: 0.2,
       loading: false,
     }
   },
