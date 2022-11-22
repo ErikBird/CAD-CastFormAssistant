@@ -65,12 +65,10 @@ import {
 } from "three-mesh-bvh";
 
 let mouse = new THREE.Vector2();
-let initial_mesh
-let line
 let targetMesh, brushMesh
 let brushActive = false;
 let renderer, camera, scene, controls
-let clientWidth, clientHeight
+let canvasWidth, canvasHeight, canvasOffsetLeft, canvasOffsetTop
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -87,82 +85,27 @@ export default {
     }
   },
   mounted() {
-    this.resizeRenderer()
-    renderer = this.$refs.renderer.renderer;
+    renderer = this.$refs.renderer;
     camera = this.$refs.camera.camera;
     scene = this.$refs.scene.scene;
     controls = this.$refs.renderer.three.cameraCtrl;
 
-    // ADD PLANE
-    const planeGeometry = new THREE.PlaneGeometry(2000, 2000);
-    planeGeometry.rotateX(-Math.PI / 2);
-    const planeMaterial = new THREE.ShadowMaterial({color: 0x000000, opacity: 0.2});
-    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-    plane.position.y = -200;
-    plane.receiveShadow = true;
-    scene.add(plane);
-    const helper = new THREE.GridHelper(2000, 100);
-    helper.position.y = -199;
-    helper.material.opacity = 0.25;
-    helper.material.transparent = true;
-    scene.add(helper);
-    let geo_color = new THREE.Color( 0x36454F);
-    // Setup Geometry
-    const positionAttribute = this.initial_geometry.getAttribute('position');
-    const colors = [];
-    for (let i = 0; i < positionAttribute.count; i++) {
+    this.resize_renderer()
 
-      colors.push(geo_color.r, geo_color.g, geo_color.b); // add for each vertex color data
-    }
-    const colorAttribute = new THREE.Float32BufferAttribute(colors, 3);
-    this.initial_geometry.setAttribute('color', colorAttribute);
+    this.add_plane_to_scene()
+    this.add_brush_to_scene()
+    this.add_geometry_to_scene(this.initial_geometry)
 
-    // Mesh setup
-    targetMesh = new THREE.Mesh(this.initial_geometry, new THREE.MeshLambertMaterial({vertexColors: true}));
-    scene.add(targetMesh);
-     let wireframe = new THREE.WireframeGeometry( this.initial_geometry );
+    this.setup_camera_orientation()
 
-    let line = new THREE.LineSegments( wireframe );
+    renderer.onBeforeRender(this.render);
 
-    line.material.color.setHex(0x000000);
-
-    scene.add(line);
-
-    // Camera Orientation setup
-    targetMesh.geometry.computeBoundingBox();
-    let box = new THREE.Box3()
-    box.copy(targetMesh.geometry.boundingBox)
-    let maximum_coordinate = Math.abs(Math.max(box.max.x, box.max.y, box.max.z))
-    let distance = maximum_coordinate / Math.tan(25 * Math.PI / 180)
-    camera.position.set(0, distance + 2, 0);
-    camera.lookAt(new THREE.Vector3(0, 0, 0));
     window.addEventListener('resize', () => {
-      this.resizeRenderer()
+      this.resize_renderer()
     });
-
-    const brushGeometry = new THREE.SphereBufferGeometry(10, 40, 40);
-    const brushMaterial = new THREE.MeshStandardMaterial({
-      color: 0xEC407A,
-      roughness: 0.75,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.5,
-      premultipliedAlpha: true,
-      emissive: 0xEC407A,
-      emissiveIntensity: 0.5,
-    });
-
-    brushMesh = new THREE.Mesh(brushGeometry, brushMaterial);
-    scene.add(brushMesh);
-
-    this.$refs.renderer.onBeforeRender(this.render);
 
     window.addEventListener('pointermove', (e) => {
-      // get x,y coords into canvas where click occurred
-      let x = e.clientX
-      let y = e.clientY
-      mouse.x = (x / window.innerWidth * 3) - 1.5;
-      mouse.y = (-(y / window.innerHeight) * 3) + 1;
+      this.update_relative_mouse_position()
 
       // disable the controls early if we're over the object because on touch screens
       // we're not constantly tracking where the cursor is.
@@ -190,14 +133,83 @@ export default {
     }, true);
   },
   methods: {
-    resizeRenderer() {
-      const renderer = this.$refs.renderer;
-      const camera = this.$refs.camera.camera;
-      clientWidth = this.$refs.rendersize.$el.clientWidth
-      clientHeight = this.$refs.rendersize.$el.clientHeight
-      camera.aspect = clientWidth / clientHeight;
+    update_relative_mouse_position() {
+      let x = e.clientX
+      let y = e.clientY
+      mouse.x = ((x - canvasOffsetLeft) / canvasWidth) * 2 - 1;
+      mouse.y = (-((y - canvasOffsetTop) / canvasHeight) * 2) + 1;
+    },
+    setup_camera_orientation() {
+      targetMesh.geometry.computeBoundingBox();
+      let box = new THREE.Box3()
+      box.copy(targetMesh.geometry.boundingBox)
+      let maximum_coordinate = Math.abs(Math.max(box.max.x, box.max.y, box.max.z))
+      let distance = maximum_coordinate / Math.tan(25 * Math.PI / 180)
+      camera.position.set(0, distance + 2, 0);
+      camera.lookAt(new THREE.Vector3(0, 0, 0));
+    },
+    add_brush_to_scene() {
+      const brushGeometry = new THREE.SphereBufferGeometry(10, 40, 40);
+      const brushMaterial = new THREE.MeshStandardMaterial({
+        color: 0xEC407A,
+        roughness: 0.75,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.5,
+        premultipliedAlpha: true,
+        emissive: 0xEC407A,
+        emissiveIntensity: 0.5,
+      });
+
+      brushMesh = new THREE.Mesh(brushGeometry, brushMaterial);
+      scene.add(brushMesh);
+    },
+    add_geometry_to_scene(geometry) {
+      this.add_color_to_geometry(geometry)
+      targetMesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({vertexColors: true}));
+      scene.add(targetMesh);
+      let wireframe = new THREE.WireframeGeometry(this.initial_geometry);
+
+      let line = new THREE.LineSegments(wireframe);
+
+      line.material.color.setHex(0x000000);
+
+      scene.add(line);
+    },
+    add_color_to_geometry(geometry) {
+      let geo_color = new THREE.Color(0x36454F);
+      const positionAttribute = geometry.getAttribute('position');
+      const colors = [];
+      for (let i = 0; i < positionAttribute.count; i++) {
+
+        colors.push(geo_color.r, geo_color.g, geo_color.b); // add for each vertex color data
+      }
+      const colorAttribute = new THREE.Float32BufferAttribute(colors, 3);
+      geometry.setAttribute('color', colorAttribute);
+    },
+    add_plane_to_scene() {
+      let planeGeometry = new THREE.PlaneGeometry(2000, 2000);
+      planeGeometry.rotateX(-Math.PI / 2);
+      let planeMaterial = new THREE.ShadowMaterial({color: 0x000000, opacity: 0.2});
+      let plane = new THREE.Mesh(planeGeometry, planeMaterial);
+      plane.position.y = -200;
+      plane.receiveShadow = true;
+      scene.add(plane);
+      let helper = new THREE.GridHelper(2000, 100);
+      helper.position.y = -199;
+      helper.material.opacity = 0.25;
+      helper.material.transparent = true;
+      scene.add(helper);
+    },
+    resize_renderer() {
+      canvasWidth = this.$refs.rendersize.$el.clientWidth
+      canvasHeight = this.$refs.rendersize.$el.clientHeight
+
+      canvasOffsetLeft = window.scrollX + this.$refs.rendersize.$el.getBoundingClientRect().left
+      canvasOffsetTop = window.scrollY + this.$refs.rendersize.$el.getBoundingClientRect().top
+      camera.aspect = canvasWidth / canvasHeight;
       camera.updateProjectionMatrix();
-      renderer.three.setSize(clientWidth, clientHeight)
+      renderer.three.setSize(canvasWidth, canvasHeight)
     },
     select_face(intersection) {
       const colorAttr = intersection.object.geometry.getAttribute('color');
