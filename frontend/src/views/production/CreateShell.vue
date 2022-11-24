@@ -1,6 +1,24 @@
 <template>
   <v-container fluid class="fill-height">
-    <v-card class="h-75">
+    <v-sheet class="h-75"
+          ref="rendersize"
+          height="100%"
+          justify="center"
+          align="center">
+        <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
+          <Camera ref="camera"/>
+          <Scene ref="scene" background="#ffffff">
+            <AmbientLight :intensity="0.9"/>
+            <PointLight color="#ffffff"/>
+            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
+            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
+            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
+            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
+            <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
+          </Scene>
+        </Renderer>
+    </v-sheet>
+    <v-card class="mt-2">
       <v-card-title>Schritt 2 - Form Erstellen</v-card-title>
       <div class="d-flex flex-row mb-6 justify-space-between">
         <v-slider
@@ -21,31 +39,9 @@
           indeterminate
           color="primary"
         ></v-progress-circular>
-        <v-btn v-if="!loading" class="ml-5 mr-5" rounded color="primary" @click="create_shell"> Update</v-btn>
+        <v-btn v-if="!loading" class="ml-5 mr-5 mt-2" rounded color="secondary" @click="create_shell"> Update</v-btn>
       </div>
-      <v-card-text
-          ref="rendersize"
-          class="h-75"
-          height="100%"
-          justify="center"
-          align="center">
-        <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
-          <Camera ref="camera"/>
-          <Scene ref="scene" background="#ffffff">
-            <AmbientLight :intensity="0.9"/>
-            <PointLight color="#ffffff"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
-          </Scene>
-        </Renderer>
-      </v-card-text>
-
-
-    </v-card>
-    <v-card-actions>
+          <v-card-actions>
       <v-spacer></v-spacer>
       <v-btn
           variant="flat"
@@ -56,6 +52,8 @@
       </v-btn>
 
     </v-card-actions>
+    </v-card>
+
   </v-container>
 </template>
 
