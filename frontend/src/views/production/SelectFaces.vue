@@ -1,37 +1,56 @@
 <template>
   <v-container fluid class="fill-height">
-    <v-card class="h-75">
+    <v-sheet
+        ref="rendersize"
+        class="h-75"
+        height="100%"
+        justify="center"
+        align="center">
+      <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
+        <Camera ref="camera"/>
+        <Scene ref="scene" background="#ffffff">
+          <AmbientLight color="#333333" :intensity="0.9"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
+        </Scene>
+      </Renderer>
+    </v-sheet>
+
+    <v-card class="mt-2">
       <v-card-title>Schritt 3 - Fläche Markieren</v-card-title>
-      <v-card-text
-          ref="rendersize"
-          class="h-75"
-          height="100%"
-          justify="center"
-          align="center">
-        <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
-          <Camera ref="camera"/>
-          <Scene ref="scene" background="#ffffff">
-            <AmbientLight color="#333333" :intensity="0.9"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
-          </Scene>
-        </Renderer>
+      <v-card-text class="d-flex flex-row justify-space-between">
+      <v-radio-group inline label="Stiftmodus wählen" mandatory v-model="brush_mode">
+        <v-radio label="Markieren" value="mark"></v-radio>
+        <v-radio label="Rotieren" value="rotate"></v-radio>
+        <v-radio label="Löschen" value="delete"></v-radio>
+      </v-radio-group>
+        <v-slider
+            min="0.1"
+            max="10"
+            width="200"
+            class="ml-10 mr-10"
+            v-model="brush_size"
+            prepend-icon="mdi-arrow-expand-vertical"
+        ></v-slider>
+        {{ brush_size.toFixed(2) }} mm
       </v-card-text>
+
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+            variant="flat"
+            color="primary"
+            @click="$emit('setStep', 3)"
+        >
+          Weiter
+        </v-btn>
+      </v-card-actions>
     </v-card>
-    <v-card-actions>
-      <v-spacer></v-spacer>
-      <v-btn
-          variant="flat"
-          color="primary"
-          @click="$emit('setStep', 3)"
-      >
-        Weiter
-      </v-btn>
-    </v-card-actions>
   </v-container>
+
 </template>
 
 <script>
@@ -81,7 +100,25 @@ export default {
   },
   data() {
     return {
-      selected_faces: []
+      selected_faces: [],
+      brush_size: 5,
+      brush_mode: "rotate",
+    }
+  },
+  watch: {
+    // Handle Orbit Controls depending on Brush Mode
+    brush_mode(newBrush, oldBrush) {
+      switch(newBrush){
+        case "delete":
+        case "mark":
+          controls.enabled = false;
+          break;
+        case "rotate":
+          controls.enabled = true;
+          break;
+        default:
+          console.error(`${newBrush} - Brush Mode not found!`);
+      }
     }
   },
   mounted() {
@@ -103,39 +140,25 @@ export default {
     window.addEventListener('resize', () => {
       this.resize_renderer()
     });
-
     window.addEventListener('pointermove', (e) => {
-      this.update_relative_mouse_position()
-
-      // disable the controls early if we're over the object because on touch screens
-      // we're not constantly tracking where the cursor is.
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      raycaster.firstHitOnly = true;
-
-      const intersects = raycaster.intersectObject(targetMesh, true);
-      if (intersects.length > 0) {
-        const intersection = intersects[0];
-        brushMesh.visible = true;
-        brushMesh.position.copy(intersection.point);
-        controls.enabled = false;
-      } else {
-        brushMesh.visible = false;
+      this.update_relative_mouse_position(e)
+      // Orbit Controls are always disabled whenever the brush is active in some sort
+      if (controls.enabled === false){
+        this.show_brush_on_intersection()
       }
     });
-
     window.addEventListener('pointerup', function (e) {
       brushActive = false;
     }, true);
-
     window.addEventListener('pointerdown', function (e) {
       brushActive = true;
     }, true);
   },
   methods: {
-    update_relative_mouse_position() {
+    update_relative_mouse_position(e) {
       let x = e.clientX
       let y = e.clientY
+      // Unfortuinately I don't know why it is -10
       mouse.x = ((x - canvasOffsetLeft) / canvasWidth) * 2 - 1;
       mouse.y = (-((y - canvasOffsetTop) / canvasHeight) * 2) + 1;
     },
@@ -149,7 +172,7 @@ export default {
       camera.lookAt(new THREE.Vector3(0, 0, 0));
     },
     add_brush_to_scene() {
-      const brushGeometry = new THREE.SphereBufferGeometry(10, 40, 40);
+      const brushGeometry = new THREE.SphereBufferGeometry(1, 40, 40);
       const brushMaterial = new THREE.MeshStandardMaterial({
         color: 0xEC407A,
         roughness: 0.75,
@@ -205,8 +228,8 @@ export default {
       canvasWidth = this.$refs.rendersize.$el.clientWidth
       canvasHeight = this.$refs.rendersize.$el.clientHeight
 
-      canvasOffsetLeft = window.scrollX + this.$refs.rendersize.$el.getBoundingClientRect().left
-      canvasOffsetTop = window.scrollY + this.$refs.rendersize.$el.getBoundingClientRect().top
+      canvasOffsetLeft = this.$refs.rendersize.$el.getBoundingClientRect().left //+ window.scrollX
+      canvasOffsetTop = this.$refs.rendersize.$el.getBoundingClientRect().top //+window.scrollY
       camera.aspect = canvasWidth / canvasHeight;
       camera.updateProjectionMatrix();
       renderer.three.setSize(canvasWidth, canvasHeight)
@@ -225,14 +248,30 @@ export default {
         colorAttr.needsUpdate = true;
       }
     },
+    show_brush_on_intersection(){
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+      raycaster.firstHitOnly = true;
+
+      const intersects = raycaster.intersectObject(targetMesh, true);
+      if (intersects.length > 0) {
+        const intersection = intersects[0];
+        brushMesh.scale.setScalar(this.brush_size);
+        brushMesh.visible = true;
+        brushMesh.position.copy(intersection.point);
+      } else {
+        brushMesh.visible = false;
+      }
+    },
     render() {
-      if (brushActive) {
+      if (brushActive && this.brush_mode==="mark") {
+
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, camera);
         raycaster.firstHitOnly = true;
         const intersects = raycaster.intersectObject(targetMesh, true);
-        controls.enabled = intersects.length === 0; //Disable orbit control if brush active
         if (intersects.length > 0) {
+
           let intersect = intersects[0];
           this.select_face(intersect)
         }
