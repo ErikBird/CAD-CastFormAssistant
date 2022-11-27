@@ -22,11 +22,11 @@
     <v-card class="mt-2">
       <v-card-title>Schritt 3 - Fläche Markieren</v-card-title>
       <v-card-text class="d-flex flex-row justify-space-between">
-      <v-radio-group inline label="Stiftmodus wählen" mandatory v-model="brush_mode">
-        <v-radio label="Markieren" value="mark"></v-radio>
-        <v-radio label="Rotieren" value="rotate"></v-radio>
-        <v-radio label="Löschen" value="delete"></v-radio>
-      </v-radio-group>
+        <v-radio-group inline label="Stiftmodus wählen" mandatory v-model="brush_mode">
+          <v-radio label="Markieren" value="mark"></v-radio>
+          <v-radio label="Rotieren" value="rotate"></v-radio>
+          <v-radio label="Löschen" value="delete"></v-radio>
+        </v-radio-group>
         <v-slider
             min="0.1"
             max="10"
@@ -94,6 +94,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 export default {
   name: "SelectFaces",
   props: ['initial_geometry'],
+  emits: ['setIndices', 'setGeometry', 'setTriangles'],
   components: {
     Plane, PhongMaterial, AmbientLight, Box, Camera, Renderer, PointLight,
     Scene, Sphere, StandardMaterial, Texture
@@ -108,7 +109,7 @@ export default {
   watch: {
     // Handle Orbit Controls depending on Brush Mode
     brush_mode(newBrush, oldBrush) {
-      switch(newBrush){
+      switch (newBrush) {
         case "delete":
         case "mark":
           controls.enabled = false;
@@ -143,7 +144,7 @@ export default {
     window.addEventListener('pointermove', (e) => {
       this.update_relative_mouse_position(e)
       // Orbit Controls are always disabled whenever the brush is active in some sort
-      if (controls.enabled === false){
+      if (controls.enabled === false) {
         this.show_brush_on_intersection()
       }
     });
@@ -190,6 +191,13 @@ export default {
     add_geometry_to_scene(geometry) {
       this.add_color_to_geometry(geometry)
       targetMesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({vertexColors: true}));
+      targetMesh.geometry.computeBoundsTree();
+      // Add the raycast function. Assumes the BVH is available on
+      // the `boundsTree` variable
+      THREE.Mesh.prototype.raycast = acceleratedRaycast;
+      targetMesh.geometry.computeVertexNormals()
+      // Update Geometry such that it contains the index to reference the selected faces
+      this.$emit('setGeometry', targetMesh.geometry)
       scene.add(targetMesh);
       let wireframe = new THREE.WireframeGeometry(this.initial_geometry);
 
@@ -248,7 +256,7 @@ export default {
         colorAttr.needsUpdate = true;
       }
     },
-    show_brush_on_intersection(){
+    show_brush_on_intersection() {
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, camera);
       raycaster.firstHitOnly = true;
@@ -264,16 +272,75 @@ export default {
       }
     },
     render() {
-      if (brushActive && this.brush_mode==="mark") {
+      if (brushActive && this.brush_mode === "mark") {
 
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, camera);
         raycaster.firstHitOnly = true;
-        const intersects = raycaster.intersectObject(targetMesh, true);
-        if (intersects.length > 0) {
+        const res = raycaster.intersectObject(targetMesh, true);
+        if (res.length > 0) {
+          let geometry = targetMesh.geometry;
+          let bvh = geometry.boundsTree;
+          let colorAttr = geometry.getAttribute('color');
+          let indexAttr = geometry.index;
 
-          let intersect = intersects[0];
-          this.select_face(intersect)
+          brushMesh.position.copy(res[0].point);
+          controls.enabled = false;
+          brushMesh.visible = true;
+
+          const inverseMatrix = new THREE.Matrix4();
+          inverseMatrix.copy(targetMesh.matrixWorld).invert();
+
+          const sphere = new THREE.Sphere();
+          sphere.center.copy(brushMesh.position).applyMatrix4(inverseMatrix);
+          sphere.radius = this.brush_size;
+
+          const indices = [];
+          const triangles = [];
+          const tempVec = new THREE.Vector3();
+          bvh.shapecast({
+            intersectsBounds: box => {
+              const intersects = sphere.intersectsBox(box);
+              const {min, max} = box;
+              if (intersects) {
+                for (let x = 0; x <= 1; x++) {
+                  for (let y = 0; y <= 1; y++) {
+                    for (let z = 0; z <= 1; z++) {
+                      tempVec.set(
+                          x === 0 ? min.x : max.x,
+                          y === 0 ? min.y : max.y,
+                          z === 0 ? min.z : max.z
+                      );
+                      if (!sphere.containsPoint(tempVec)) {
+                        return INTERSECTED;
+                      }
+                    }
+                  }
+                }
+                return CONTAINED;
+              }
+              return intersects ? INTERSECTED : NOT_INTERSECTED;
+            },
+            intersectsTriangle: (tri, i, contained) => {
+              if (contained || tri.intersectsSphere(sphere)) {
+                const i3 = 3 * i;
+                triangles.push(tri)
+                indices.push(i3, i3 + 1, i3 + 2);
+              }
+              return false;
+            }
+          });
+          let color = new THREE.Color(0x009900);
+          for (let i = 0, l = indices.length; i < l; i++) {
+            const i2 = indexAttr.getX(indices[i]);
+            let face_color = new THREE.Color().fromBufferAttribute(colorAttr, i2)
+            if (color.getHex() !== face_color.getHex()) {
+               colorAttr.setXYZ(i2, color.r, color.g, color.b);
+            }
+          }
+          this.$emit('setIndices', indices)
+          this.$emit('setTriangles', triangles)
+          colorAttr.needsUpdate = true;
         }
       }
     }

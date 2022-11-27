@@ -108,7 +108,7 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 export default {
   name: "SelectFaces",
-  props: ['geometry', 'faces', 'shell_thickness'],
+  props: ['geometry', 'indices', 'shell_thickness','triangles'],
   emits: ['setGeometry', 'setThickness'],
   components: {
     Plane, PhongMaterial, AmbientLight, Box, Camera, Renderer, PointLight,
@@ -210,26 +210,27 @@ export default {
 
       let pos = targetMesh.geometry.attributes.position;
 
-
       let colors = [];
       let holeGeometry = new THREE.CylinderGeometry( this.radius, this.radius, this.shell_thickness+0.1, 8 ).toNonIndexed ();
       holeGeometry.center()
+
       for (let i = 0; i < holeGeometry.attributes.position.count; i++) {
         colors.push(1, 1, 1); // add for each vertex color data
       }
       let holeColorAttribute = new THREE.Float32BufferAttribute(colors, 3);
       holeGeometry.setAttribute('color', holeColorAttribute);
       let sampleMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
-      for ( let i = 0; i < this.faces.length; i ++ ) {
-        let face = this.faces[i]
-        let face_normal = new THREE.Vector3(face.normal.x,face.normal.y,face.normal.z).normalize()
+      console.log(this.triangles)
+      for(let triangle of this.triangles){
 
-        let a = new THREE.Vector3()
-            a.fromBufferAttribute(pos, face.a)
-        let b = new THREE.Vector3()
-            b.fromBufferAttribute(pos, face.b)
-        let c = new THREE.Vector3()
-            c.fromBufferAttribute(pos, face.c)
+        let face_normal = new THREE.Vector3();
+        triangle.getNormal(face_normal);
+        face_normal.normalize()
+
+        let a = triangle.a
+        let b = triangle.b
+        let c = triangle.c
+
         let ab = a.clone().sub(b).normalize()
         let ac = a.clone().sub(c).normalize()
         let bc = b.clone().sub(c).normalize()

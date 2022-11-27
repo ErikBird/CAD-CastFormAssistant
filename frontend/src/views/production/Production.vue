@@ -14,12 +14,15 @@
       v-if="step===2"
       :initial_geometry="shellGeometry"
       @setStep="setStep"
-      @set-faces="setSelectedFaces"/>
+      @set-geometry="setShellGeometry"
+      @set-triangles="setSelectedTriangles"
+      @set-indices="setSelectedIndices"/>
     <ConfigurePerforation
       v-if="step===3"
       :geometry="shellGeometry"
       :shell_thickness="shellThickness"
-      :faces="selectedFaces"
+      :indices="selectedIndices"
+      :triangles="selectedTriangles"
       @setStep="setStep"
       @set-radius="setRadius"
       @set-pd="setPointDistance"
@@ -60,7 +63,8 @@ export default {
       initialGeometry: null,
       shellThickness: null,
       shellGeometry:null,
-      selectedFaces:[],
+      selectedIndices:[],
+      selectedTriangles:[],
       subtractMeshes: [],
       unionMeshes:[],
       holeRadius: null,
@@ -81,8 +85,11 @@ export default {
     setShellGeometry(geometry){
       this.shellGeometry = geometry
     },
-    setSelectedFaces(faces){
-      this.selectedFaces = faces
+    setSelectedTriangles(triangles){
+      this.selectedTriangles = triangles
+    },
+    setSelectedIndices(indeces){
+      this.selectedIndices = indeces
     },
     setHoleMeshes(meshes){
       this.subtractMeshes = meshes
