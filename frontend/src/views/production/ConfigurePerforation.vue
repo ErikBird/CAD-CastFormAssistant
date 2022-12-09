@@ -1,73 +1,75 @@
 <template>
   <v-container fluid class="fill-height">
-    <v-card class="h-75">
+    <v-sheet
+        ref="rendersize"
+        class="h-75"
+        height="100%"
+        justify="center"
+        align="center">
+      <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
+        <Camera ref="camera"/>
+        <Scene ref="scene" background="#ffffff">
+          <AmbientLight color="#333333" :intensity="0.9"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
+          <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
+        </Scene>
+      </Renderer>
+    </v-sheet>
+    <v-card class="mt-2">
       <v-card-title>Schritt 4 - Perforierung Einstellen</v-card-title>
+      <v-card-text>
         <div class="d-flex flex-row mb-6 justify-space-between">
-        <v-slider
-            :disabled="slider_disabled"
-            min="0.1"
-            max="2"
-            width="200"
-            @update:modelValue="place_hole_grid"
-            class="ml-10 mr-10"
-            v-model="radius"
-            prepend-icon="mdi-radius"
-        ></v-slider>
+          <v-slider
+              :disabled="slider_disabled"
+              min="0.1"
+              max="2"
+              width="200"
+              @update:modelValue="place_hole_grid"
+              class="ml-10 mr-10"
+              v-model="radius"
+              prepend-icon="mdi-radius"
+          ></v-slider>
           <v-chip class="mr-5">{{ parseFloat(radius.toFixed(2)) }} mm</v-chip>
           <v-slider
               :disabled="slider_disabled"
-            min="1.5"
-            max="5"
-            width="200"
-            @update:modelValue="place_hole_grid"
-            class="ml-10 mr-10"
-            v-model="point_distance"
-            prepend-icon="mdi-map-marker-distance"
-        ></v-slider>
-        <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
+              min="1.5"
+              max="5"
+              width="200"
+              @update:modelValue="place_hole_grid"
+              class="ml-10 mr-10"
+              v-model="point_distance"
+              prepend-icon="mdi-map-marker-distance"
+          ></v-slider>
+          <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
           <v-slider
               :disabled="slider_disabled"
-            min="1"
-            max="5"
-            width="200"
-            @update:modelValue="place_hole_grid"
-            class="ml-10 mr-10"
-            v-model="margin"
-            prepend-icon="mdi-billiards-rack"
-        ></v-slider>
-        <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
-
-
-      </div>
-      <v-card-text
-          ref="rendersize"
-          class="h-75"
-          height="100%"
-          justify="center"
-          align="center">
-        <Renderer antialias shadow ref="renderer" :orbit-ctrl="{ enableDamping: true, dampingFactor: 0.05 }">
-          <Camera ref="camera"/>
-          <Scene ref="scene" background="#ffffff">
-            <AmbientLight color="#333333" :intensity="0.9"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:-1000, y:1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x:1000, y:-1000}"/>
-            <PointLight color="#ffffff" :intensity="0.5" :position="{ x: 0, y: 1500, z: 200}"/>
-          </Scene>
-        </Renderer>
+              min="1"
+              max="5"
+              width="200"
+              @update:modelValue="place_hole_grid"
+              class="ml-10 mr-10"
+              v-model="margin"
+              prepend-icon="mdi-billiards-rack"
+          ></v-slider>
+          <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
+        </div>
       </v-card-text>
-    </v-card>
-    <v-card-actions>
+      <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn
-        variant="flat"
-        color="primary"
-        @click="next"
+            variant="flat"
+            color="primary"
+            @click="next"
         >
           Weiter
         </v-btn>
       </v-card-actions>
+
+
+    </v-card>
   </v-container>
 </template>
 
@@ -145,8 +147,20 @@ export default {
     scene.add(helper);
 
     // Mesh setup
-    targetMesh = new THREE.Mesh(this.geometry, new THREE.MeshLambertMaterial({color:'#36454F'}));
+    targetMesh = new THREE.Mesh(this.geometry, new THREE.MeshLambertMaterial({
+      color: '#36454F',
+      opacity: 0.7,
+      transparent: true
+    }));
+
     scene.add(targetMesh);
+    let wireframe = new THREE.WireframeGeometry(targetMesh.geometry);
+
+    let line = new THREE.LineSegments(wireframe);
+
+    line.material.color.setHex(0x000000);
+
+    scene.add(line);
 
     // Camera Orientation setup
     targetMesh.geometry.computeBoundingBox();
@@ -158,6 +172,7 @@ export default {
 
     camera.lookAt(new THREE.Vector3(0, 0, 0));
     this.place_hole_grid()
+
     window.addEventListener('resize', () => {
       this.resizeRenderer()
     });
@@ -193,13 +208,43 @@ export default {
       this.meshes = []
       renderer.renderLists.dispose();
     },
-    place_hole_grid(){
+    place_sphere(position) {
+      let geometry = new THREE.SphereGeometry(1, 32, 16);
+      geometry.center()
+      let sampleMesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+      sampleMesh.position.copy(position);
+      this.meshes.push(sampleMesh.clone())
+      scene.add(sampleMesh);
+    },
+    test_triangles() {
+      console.log('test_triangles')
+      for (let triangle of this.triangles) {
+
+        let face_normal = new THREE.Vector3();
+        triangle.getNormal(face_normal);
+        face_normal.normalize()
+
+
+        let a = triangle.a
+        let b = triangle.b
+        let c = triangle.c
+
+        this.place_sphere(a)
+        this.place_sphere(b)
+        this.place_sphere(c)
+      }
+    },
+    place_hole_grid() {
+      this.test_triangles()
+
       this.slider_disabled = true
+
       /* A function to check whether point P lies inside a Face */
       function isInside(triangle, p) {
         function numbersCloseEnoughToEqual(n1, n2) {
           return n1.toPrecision(4) === n2.toPrecision(4)
         }
+
         let A = triangle.getArea()
         let A1 = new THREE.Triangle(p, triangle.b, triangle.c).getArea()
         let A2 = new THREE.Triangle(triangle.a, p, triangle.c).getArea()
@@ -221,15 +266,20 @@ export default {
       holeGeometry.setAttribute('color', holeColorAttribute);
       let sampleMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
       console.log(this.triangles)
-      for(let triangle of this.triangles){
+      for(let triangle of this.triangles) {
 
         let face_normal = new THREE.Vector3();
         triangle.getNormal(face_normal);
         face_normal.normalize()
 
-        let a = triangle.a
-        let b = triangle.b
-        let c = triangle.c
+        let a = triangle.a.clone()
+        let b = triangle.b.clone()
+        let c = triangle.c.clone()
+
+        this.place_sphere(a.clone())
+        this.place_sphere(b.clone())
+        this.place_sphere(c.clone())
+
 
         let ab = a.clone().sub(b).normalize()
         let ac = a.clone().sub(c).normalize()
@@ -238,11 +288,11 @@ export default {
         let cb = c.clone().sub(b).normalize()
         let ca = c.clone().sub(a).normalize()
 
-        let pos_a = a.addScaledVector ( ab, - this.margin ).addScaledVector ( ac, - this.margin )
+        let pos_a = a.addScaledVector(ab, -this.margin).addScaledVector(ac, -this.margin)
         let pos_b = b.addScaledVector ( ba, - this.margin ).addScaledVector ( bc, - this.margin )
         let pos_c = c.addScaledVector ( ca, - this.margin ).addScaledVector ( cb, - this.margin )
         let face_with_margin = new THREE.Triangle(pos_a,pos_b,pos_c)
-
+        //debugger;
         for (let vec_len = 0; vec_len <= pos_a.distanceTo(pos_c) ;  vec_len += this.point_distance){
           let row_num = 0
           let point_pos = pos_a.clone().addScaledVector ( ac, - vec_len ).addScaledVector ( bc, row_num * this.point_distance  )
