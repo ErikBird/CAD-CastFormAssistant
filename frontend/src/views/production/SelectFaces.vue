@@ -23,9 +23,9 @@
       <v-card-title>Schritt 3 - Fläche Markieren</v-card-title>
       <v-card-text class="d-flex flex-row justify-space-between">
         <v-radio-group inline label="Stiftmodus wählen" mandatory v-model="brush_mode">
-          <v-radio label="Markieren" value="mark"></v-radio>
-          <v-radio label="Rotieren" value="rotate"></v-radio>
-          <v-radio label="Löschen" value="delete"></v-radio>
+          <v-radio label="Markieren" :value=this.modes[0]></v-radio>
+          <v-radio label="Rotieren" :value=this.modes[1]></v-radio>
+          <v-radio label="Löschen" :value=this.modes[2]></v-radio>
         </v-radio-group>
         <v-slider
             min="0.1"
@@ -88,19 +88,22 @@ let targetMesh, brushMesh
 let brushActive = false;
 let renderer, camera, scene, controls
 let canvasWidth, canvasHeight, canvasOffsetLeft, canvasOffsetTop
+let color_default = new THREE.Color(0x36454F);
+let color_marked = new THREE.Color(0x009900);
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 export default {
   name: "SelectFaces",
   props: ['initial_geometry'],
-  emits: ['setIndices', 'setGeometry', 'setTriangles'],
+  emits: ['setIndices', 'setGeometry', 'addTriangle', 'deleteTriangle'],
   components: {
     Plane, PhongMaterial, AmbientLight, Box, Camera, Renderer, PointLight,
     Scene, Sphere, StandardMaterial, Texture
   },
   data() {
     return {
+      modes: ['mark', 'rotate', 'delete'],
       selected_faces: [],
       brush_size: 5,
       brush_mode: "rotate",
@@ -129,11 +132,9 @@ export default {
     controls = this.$refs.renderer.three.cameraCtrl;
 
     this.resize_renderer()
-
     this.add_plane_to_scene()
     this.add_brush_to_scene()
     this.add_geometry_to_scene(this.initial_geometry)
-
     this.setup_camera_orientation()
 
     renderer.onBeforeRender(this.render);
@@ -208,12 +209,10 @@ export default {
       scene.add(line);
     },
     add_color_to_geometry(geometry) {
-      let geo_color = new THREE.Color(0x36454F);
       const positionAttribute = geometry.getAttribute('position');
       const colors = [];
       for (let i = 0; i < positionAttribute.count; i++) {
-
-        colors.push(geo_color.r, geo_color.g, geo_color.b); // add for each vertex color data
+        colors.push(color_default.r, color_default.g, color_default.b); // add for each vertex color data
       }
       const colorAttribute = new THREE.Float32BufferAttribute(colors, 3);
       geometry.setAttribute('color', colorAttribute);
@@ -236,8 +235,8 @@ export default {
       canvasWidth = this.$refs.rendersize.$el.clientWidth
       canvasHeight = this.$refs.rendersize.$el.clientHeight
 
-      canvasOffsetLeft = this.$refs.rendersize.$el.getBoundingClientRect().left //+ window.scrollX
-      canvasOffsetTop = this.$refs.rendersize.$el.getBoundingClientRect().top //+window.scrollY
+      canvasOffsetLeft = this.$refs.rendersize.$el.getBoundingClientRect().left
+      canvasOffsetTop = this.$refs.rendersize.$el.getBoundingClientRect().top
       camera.aspect = canvasWidth / canvasHeight;
       camera.updateProjectionMatrix();
       renderer.three.setSize(canvasWidth, canvasHeight)
@@ -271,9 +270,15 @@ export default {
         brushMesh.visible = false;
       }
     },
+    place_sphere(position) {
+      let geometry = new THREE.SphereGeometry(1, 32, 16);
+      geometry.center()
+      let sampleMesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+      sampleMesh.position.copy(position);
+      scene.add(sampleMesh);
+    },
     render() {
-      if (brushActive && this.brush_mode === "mark") {
-
+      if (brushActive && this.brush_mode !== this.modes[1]) {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, camera);
         raycaster.firstHitOnly = true;
@@ -324,22 +329,53 @@ export default {
             intersectsTriangle: (tri, i, contained) => {
               if (contained || tri.intersectsSphere(sphere)) {
                 const i3 = 3 * i;
+
                 triangles.push(tri)
                 indices.push(i3, i3 + 1, i3 + 2);
+                for (let i = 0; i < 3; i++) {
+                  let i2 = indexAttr.getX(i3 + i);
+                  let face_color = new THREE.Color().fromBufferAttribute(colorAttr, i2);
+                  switch (this.brush_mode) {
+                    case this.modes[0]:
+                      if (color_marked.getHex() !== face_color.getHex()) {
+                        colorAttr.setXYZ(i2, color_marked.r, color_marked.g, color_marked.b);
+                      }
+                      // Important to clone triangle - otherwise it iterates to next triangle once called.
+                      this.$emit('addTriangle', tri.clone())
+                      break;
+                    case this.modes[2]:
+                      if (color_default.getHex() !== face_color.getHex()) {
+                        colorAttr.setXYZ(i2, color_default.r, color_default.g, color_default.b);
+                      }
+                      this.$emit('deleteTriangle', tri)
+                      break;
+                  }
+                }
+                colorAttr.needsUpdate = true;
               }
               return false;
             }
           });
-          let color = new THREE.Color(0x009900);
+          /*
           for (let i = 0, l = indices.length; i < l; i++) {
             const i2 = indexAttr.getX(indices[i]);
-            let face_color = new THREE.Color().fromBufferAttribute(colorAttr, i2)
-            if (color.getHex() !== face_color.getHex()) {
-               colorAttr.setXYZ(i2, color.r, color.g, color.b);
+            let face_color = new THREE.Color().fromBufferAttribute(colorAttr, i2);
+            switch (this.brush_mode) {
+              case this.modes[0]:
+                if (color_marked.getHex() !== face_color.getHex()) {
+                  colorAttr.setXYZ(i2, color_marked.r, color_marked.g, color_marked.b);
+                }
+                break;
+              case this.modes[2]:
+                if (color_default.getHex() !== face_color.getHex()) {
+                  colorAttr.setXYZ(i2, color_default.r, color_default.g, color_default.b);
+                }
+                break;
             }
-          }
+
+          }*/
           this.$emit('setIndices', indices)
-          this.$emit('setTriangles', triangles)
+          //this.$emit('setTriangles', triangles)
           colorAttr.needsUpdate = true;
         }
       }
