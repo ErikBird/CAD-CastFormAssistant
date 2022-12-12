@@ -21,12 +21,25 @@
 
     <v-card class="mt-2">
       <v-card-title>Schritt 3 - Fläche Markieren</v-card-title>
-      <v-card-text class="d-flex flex-row justify-space-between">
-        <v-radio-group inline label="Stiftmodus wählen" mandatory v-model="brush_mode">
-          <v-radio label="Markieren" :value=this.modes[0]></v-radio>
-          <v-radio label="Rotieren" :value=this.modes[1]></v-radio>
-          <v-radio label="Löschen" :value=this.modes[2]></v-radio>
-        </v-radio-group>
+      <v-card-actions>
+        <v-btn-toggle
+            v-model="brush_mode"
+            rounded="0"
+            color="deep-purple-accent-3"
+            group
+        >
+          <v-btn :value=this.modes[0]>
+            Markieren
+          </v-btn>
+
+          <v-btn :value=this.modes[1]>
+            Rotieren
+          </v-btn>
+
+          <v-btn :value=this.modes[2]>
+            Löschen
+          </v-btn>
+        </v-btn-toggle>
         <v-slider
             min="0.1"
             max="10"
@@ -36,9 +49,6 @@
             prepend-icon="mdi-arrow-expand-vertical"
         ></v-slider>
         {{ brush_size.toFixed(2) }} mm
-      </v-card-text>
-
-      <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn
             variant="flat"
