@@ -23,38 +23,38 @@
       <v-card-text>
         <div class="d-flex flex-row mb-6 justify-space-between">
           <v-slider
-              :disabled="slider_disabled"
               min="0.1"
               max="2"
               width="200"
-              @update:modelValue="place_hole_grid"
               class="ml-10 mr-10"
               v-model="radius"
               prepend-icon="mdi-radius"
           ></v-slider>
           <v-chip class="mr-5">{{ parseFloat(radius.toFixed(2)) }} mm</v-chip>
           <v-slider
-              :disabled="slider_disabled"
               min="1.5"
               max="5"
               width="200"
-              @update:modelValue="place_hole_grid"
               class="ml-10 mr-10"
               v-model="point_distance"
               prepend-icon="mdi-map-marker-distance"
           ></v-slider>
           <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
           <v-slider
-              :disabled="slider_disabled"
               min="1"
               max="5"
               width="200"
-              @update:modelValue="place_hole_grid"
               class="ml-10 mr-10"
               v-model="margin"
               prepend-icon="mdi-billiards-rack"
           ></v-slider>
           <v-chip class="mr-5">{{ parseFloat(point_distance.toFixed(2)) }} mm</v-chip>
+          <v-progress-circular
+              v-if="loading"
+              indeterminate
+              color="primary"
+          ></v-progress-circular>
+          <v-btn v-if="!loading" class="ml-5 mr-5" rounded color="secondary" @click="place_hole_grid"> Update</v-btn>
         </div>
       </v-card-text>
       <v-card-actions>
@@ -102,6 +102,7 @@ import {
   INTERSECTED,
   NOT_INTERSECTED
 } from "three-mesh-bvh";
+
 let targetMesh
 let renderer, camera, scene, controls
 let clientWidth, clientHeight
@@ -110,7 +111,7 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 export default {
   name: "SelectFaces",
-  props: ['geometry', 'indices', 'shell_thickness','triangles'],
+  props: ['geometry', 'indices', 'shell_thickness', 'triangles'],
   emits: ['setGeometry', 'setThickness'],
   components: {
     Plane, PhongMaterial, AmbientLight, Box, Camera, Renderer, PointLight,
@@ -121,8 +122,8 @@ export default {
       radius: 1,// point radius
       point_distance: 3, // Distance between the points
       margin: 3, // Minimal margin within the triangle before the points start
-      slider_disabled: false,
-      meshes: []
+      meshes: [],
+      loading: false
     }
   },
   mounted() {
@@ -149,18 +150,9 @@ export default {
     // Mesh setup
     targetMesh = new THREE.Mesh(this.geometry, new THREE.MeshLambertMaterial({
       color: '#36454F',
-      opacity: 0.7,
-      transparent: true
     }));
 
     scene.add(targetMesh);
-    let wireframe = new THREE.WireframeGeometry(targetMesh.geometry);
-
-    let line = new THREE.LineSegments(wireframe);
-
-    line.material.color.setHex(0x000000);
-
-    scene.add(line);
 
     // Camera Orientation setup
     targetMesh.geometry.computeBoundingBox();
@@ -179,7 +171,7 @@ export default {
 
   },
   methods: {
-    next(){
+    next() {
       this.$emit('setRadius', this.radius)
       this.$emit('setPD', this.point_distance)
       this.$emit('setMargin', this.margin)
@@ -195,9 +187,9 @@ export default {
       camera.updateProjectionMatrix();
       renderer.three.setSize(clientWidth, clientHeight)
     },
-    clear_meshes(){
-      scene.children.forEach(function(child) {
-        if(child instanceof THREE.Mesh){
+    clear_meshes() {
+      scene.children.forEach(function (child) {
+        if (child instanceof THREE.Mesh) {
           if (child.name === "sample") {
             child.geometry.dispose();
             child.material.dispose();
@@ -209,15 +201,27 @@ export default {
       renderer.renderLists.dispose();
     },
     place_sphere(position) {
-      let geometry = new THREE.SphereGeometry(1, 32, 16);
+      let geometry = new THREE.SphereGeometry(0.2, 32, 16);
       geometry.center()
       let sampleMesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
       sampleMesh.position.copy(position);
       this.meshes.push(sampleMesh.clone())
       scene.add(sampleMesh);
     },
+    place_hole(point_pos, face_normal) {
+      let sampleGeometry = new THREE.CylinderGeometry(this.radius, this.radius, this.shell_thickness + 0.1, 8).toNonIndexed()
+      let sampleMesh = new THREE.Mesh(sampleGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+      point_pos.addScaledVector(face_normal, -this.shell_thickness * 0.5)
+      sampleMesh.lookAt(face_normal);
+      sampleMesh.position.copy(point_pos.clone());
+      sampleMesh.rotateX(Math.PI / 2);
+      // Make sure the .matrix of each mesh is current
+      sampleMesh.updateMatrix();
+      sampleMesh.name = "sample"; // To keep track of all intersections and dispose them on parameter change
+      this.meshes.push(sampleMesh.clone())
+      scene.add(sampleMesh);
+    },
     test_triangles() {
-      console.log('test_triangles')
       for (let triangle of this.triangles) {
 
         let face_normal = new THREE.Vector3();
@@ -234,11 +238,80 @@ export default {
         this.place_sphere(c)
       }
     },
-    place_hole_grid() {
-      this.test_triangles()
 
-      this.slider_disabled = true
+    add_arrow(dir, origin) {
+      const arrowHelper = new THREE.ArrowHelper(dir, origin, 5, 0xffff00);
+      scene.add(arrowHelper);
+    },
+    get_hypotenuse(triangle) {
+      /*
+      * Returns the start and end point of the hypotenuses as well as the third point in the triangle
+      * */
+      let a = triangle.a.clone()
+      let b = triangle.b.clone()
+      let c = triangle.c.clone()
+      let hypo_start, hypo_end, third
+      let hypotenuse_length = Math.max(a.distanceTo(b), a.distanceTo(c), b.distanceTo(c))
 
+      switch (hypotenuse_length) {
+        case a.distanceTo(b):
+          hypo_start = a.clone()
+          hypo_end = b.clone()
+          third = c.clone()
+          break;
+        case a.distanceTo(c):
+          hypo_start = a.clone()
+          hypo_end = b.clone()
+          third = c.clone()
+          break;
+        case b.distanceTo(c):
+          hypo_start = b.clone()
+          hypo_end = c.clone()
+          third = a.clone()
+          break;
+        default:
+          console.error('Error while determining the hypotenuse of triangle:', triangle)
+      }
+      return {hypo_start, hypo_end, third, hypotenuse_length};
+    },
+    get_vectors(triangle) {
+      let {hypo_start, hypo_end, third, hypotenuse_length} = this.get_hypotenuse(triangle)
+      let hypo = hypo_end.clone().sub(hypo_start).normalize()
+      //this.add_arrow(hypo, hypo_start)
+
+      //this.place_sphere(hypo_start)
+      //this.place_sphere(hypo_end)
+
+      let vector = third.clone().sub(hypo_start)
+      // http://immersivemath.com/ila/ch03_dotproduct/ch03.html
+      //  Orthogonal Projection
+      let projection_vector = hypo.multiplyScalar(vector.dot(hypo) / hypo.lengthSq())
+      let middle_point = hypo_start.clone().add(projection_vector)
+      let height = middle_point.distanceTo(third)
+      let ortho = third.clone().sub(middle_point).normalize()
+      //this.place_sphere(middle_point)
+      //this.add_arrow(ortho, middle_point)
+      return {hypo_start, hypo, ortho, hypotenuse_length, height}
+    },
+    shrink_triangle_by_margin(triangle, margin) {
+      let a = triangle.a.clone()
+      let b = triangle.b.clone()
+      let c = triangle.c.clone()
+
+
+      let ab = a.clone().sub(b).normalize()
+      let ac = a.clone().sub(c).normalize()
+      let bc = b.clone().sub(c).normalize()
+      let ba = b.clone().sub(a).normalize()
+      let cb = c.clone().sub(b).normalize()
+      let ca = c.clone().sub(a).normalize()
+
+      let pos_a = a.addScaledVector(ab, -margin).addScaledVector(ac, -margin)
+      let pos_b = b.addScaledVector(ba, -margin).addScaledVector(bc, -margin)
+      let pos_c = c.addScaledVector(ca, -margin).addScaledVector(cb, -margin)
+      return new THREE.Triangle(pos_a, pos_b, pos_c)
+    },
+    perforate(triangle) {
       /* A function to check whether point P lies inside a Face */
       function isInside(triangle, p) {
         function numbersCloseEnoughToEqual(n1, n2) {
@@ -251,71 +324,30 @@ export default {
         let A3 = new THREE.Triangle(triangle.a, triangle.b, p).getArea()
         return numbersCloseEnoughToEqual(A, A1 + A2 + A3);
       }
-      this.clear_meshes()
 
-      let pos = targetMesh.geometry.attributes.position;
+      let {hypo_start, hypo, ortho, hypotenuse_length, height} = this.get_vectors(triangle)
+      let face_normal = new THREE.Vector3();
+      triangle.getNormal(face_normal);
+      face_normal.normalize()
+      for (let vec_length = 0; vec_length <= hypotenuse_length; vec_length += this.point_distance) {
+        for (let vec_height = 0; vec_height <= height; vec_height += this.point_distance) {
+          let point_pos = hypo_start.clone().addScaledVector(hypo.normalize(), vec_length + this.margin).addScaledVector(ortho.normalize(), vec_height + this.margin)
+          if (isInside(this.shrink_triangle_by_margin(triangle, this.margin), point_pos)) {
 
-      let colors = [];
-      let holeGeometry = new THREE.CylinderGeometry( this.radius, this.radius, this.shell_thickness+0.1, 8 ).toNonIndexed ();
-      holeGeometry.center()
-
-      for (let i = 0; i < holeGeometry.attributes.position.count; i++) {
-        colors.push(1, 1, 1); // add for each vertex color data
-      }
-      let holeColorAttribute = new THREE.Float32BufferAttribute(colors, 3);
-      holeGeometry.setAttribute('color', holeColorAttribute);
-      let sampleMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
-      console.log(this.triangles)
-      for(let triangle of this.triangles) {
-
-        let face_normal = new THREE.Vector3();
-        triangle.getNormal(face_normal);
-        face_normal.normalize()
-
-        let a = triangle.a.clone()
-        let b = triangle.b.clone()
-        let c = triangle.c.clone()
-
-        this.place_sphere(a.clone())
-        this.place_sphere(b.clone())
-        this.place_sphere(c.clone())
-
-
-        let ab = a.clone().sub(b).normalize()
-        let ac = a.clone().sub(c).normalize()
-        let bc = b.clone().sub(c).normalize()
-        let ba = b.clone().sub(a).normalize()
-        let cb = c.clone().sub(b).normalize()
-        let ca = c.clone().sub(a).normalize()
-
-        let pos_a = a.addScaledVector(ab, -this.margin).addScaledVector(ac, -this.margin)
-        let pos_b = b.addScaledVector ( ba, - this.margin ).addScaledVector ( bc, - this.margin )
-        let pos_c = c.addScaledVector ( ca, - this.margin ).addScaledVector ( cb, - this.margin )
-        let face_with_margin = new THREE.Triangle(pos_a,pos_b,pos_c)
-        //debugger;
-        for (let vec_len = 0; vec_len <= pos_a.distanceTo(pos_c) ;  vec_len += this.point_distance){
-          let row_num = 0
-          let point_pos = pos_a.clone().addScaledVector ( ac, - vec_len ).addScaledVector ( bc, row_num * this.point_distance  )
-          while (isInside(face_with_margin, point_pos||row_num<1)){
-          //  while(row_num<6){
-            let sampleGeometry = holeGeometry.clone()
-            let sampleMesh = new THREE.Mesh( sampleGeometry, sampleMaterial );
-            point_pos.addScaledVector ( face_normal, - this.shell_thickness * 0.5)
-            sampleMesh.lookAt( face_normal );
-            sampleMesh.position.copy( point_pos );
-            sampleMesh.rotateX( Math.PI / 2 );
-            // Make sure the .matrix of each mesh is current
-            sampleMesh.updateMatrix();
-            sampleMesh.name = "sample"; // To keep track of all intersections and dispose them on parameter change
-            this.meshes.push(sampleMesh.clone())
-            scene.add( sampleMesh );
-            row_num ++
-            point_pos = pos_a.clone().addScaledVector ( ac, - vec_len ).addScaledVector ( bc, row_num * this.point_distance  )
+            this.place_hole(point_pos, face_normal)
           }
         }
       }
-      this.slider_disabled = false
+
     },
+    place_hole_grid() {
+      //this.test_triangles()
+      this.clear_meshes()
+      for (let triangle of this.triangles) {
+        this.perforate(triangle);
+      }
+
+    }
   }
 }
 </script>
