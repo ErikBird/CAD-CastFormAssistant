@@ -57,8 +57,11 @@ export default {
       let file = this.$refs.file.files[0];
       let url = URL.createObjectURL(file)
       if (file.size < 10000000) {
-
-        if (file.type === 'model/stl') {
+        let file_ext = file.name.slice((file.name.lastIndexOf(".") - 1 >>> 0) + 2);
+        console.log(file)
+        if (file_ext.toLowerCase() === 'stl') {
+          // File Type Solution is more elegant but did not work on Windows.
+          //if (file.type === 'model/stl') {
           this.loading = true
           let loader = new STLLoader();
           loader.load(url, (geometry) => {
@@ -66,7 +69,8 @@ export default {
             this.$emit('SetGeometry', geometry)
             this.$emit('setStep', 1)
           }, this.onProgress);
-        } else if (file.type === 'model/obj') {
+        } else if (file_ext.toLowerCase() === 'obj') {
+          //} else if (file.type === 'model/obj') {
           this.loading = true
           let loader = new OBJLoader();
           loader.load(url, (obj) => {
@@ -75,7 +79,7 @@ export default {
             this.$emit('setStep', 1)
           }, this.onProgress);
         } else {
-          console.log(file.type)
+          console.log('file:', file)
           alert('Something went wront with the file format. No loader has been found.')
         }
       }
