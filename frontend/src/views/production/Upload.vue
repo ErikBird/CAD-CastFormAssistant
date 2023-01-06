@@ -75,6 +75,7 @@ export default {
             this.$emit('setStep', 1)
           }, this.onProgress);
         } else {
+          console.log(file.type)
           alert('Something went wront with the file format. No loader has been found.')
         }
       }
